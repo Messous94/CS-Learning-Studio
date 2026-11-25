@@ -43,7 +43,40 @@ if (lessonParams.get('lesson') && lessonParams.get('title')) {
   context.textContent = 'المحاكي مرتبط بدرس «'+lessonParams.get('title')+'».';
   context.hidden = false;
 }
-function render(){const t=tab(),s=t.machine;
+const guides = new Map([
+  ['register', {title:'كتابة السجل', code:'LDI R0, 9\nHALT', question:'بعد أي نبضة تظهر القيمة 9 في R0 لأول مرة؟', choices:[1,4,5], unit:'نبضة', measure:s=>s.r[0]===9?s.cycles:null}],
+  ['memory', {title:'الكتابة والقراءة من الذاكرة', code:'LDI R0, 12\nSTORE R0, 240\nLDI R0, 0\nLOAD R1, 240\nHALT', question:'ما قيمة R1 بعد القراءة من عنوان الذاكرة 240؟', choices:[0,12,240], measure:s=>s.halt?s.r[1]:null}],
+  ['branch', {title:'القفز الشرطي', code:'LDI R0, 2\nLDI R1, 1\nSUB R0, R1\nJNZ taken\nLDI R2, 4\nHALT\ntaken: LDI R2, 7\nHALT', question:'ما قيمة R2 عند التوقف بعد اختبار شرط JNZ؟', choices:[0,4,7], measure:s=>s.halt?s.r[2]:null}]
+]);
+function selectGuide(id) {
+  const guide=guides.get(id);
+  if(!guide)return;
+  let experiment=data.tabs.find(t=>t.guide===id && t.code===guide.code && t.accepted===guide.code);
+  if(!experiment){
+    experiment={...fresh(),guide:id,code:guide.code,accepted:guide.code,machine:boot(assemble(guide.code))};
+    data.tabs.push(experiment);
+  }
+  data.active=experiment.id;
+}
+function renderGuide(t) {
+  const guide=guides.get(t.guide);
+  const visible=guide && t.code===guide.code && t.accepted===guide.code;
+  $('guide-task').hidden=!visible;
+  if(!visible)return;
+  $('guide-question').textContent=guide.question;
+  const prediction=$('prediction');
+  if(prediction.dataset.guide!==t.guide){
+    prediction.replaceChildren(new Option('اختر توقّعك',''), ...guide.choices.map(n=>new Option(String(n),String(n))));
+    prediction.dataset.guide=t.guide;
+  }
+  prediction.value=t.prediction??'';
+  const states=[...t.past,t.machine];
+  const actual=states.map(guide.measure).find(n=>n!==null);
+  $('guide-result').textContent=actual===undefined?'شغّل البرنامج أو تقدّم نبضة بنبضة.':('النتيجة الفعلية: '+actual+(guide.unit?' '+guide.unit:'')+(prediction.value===''?'':Number(prediction.value)===actual?' · توقّعك صحيح.':' · توقّعك كان '+prediction.value+'.'));
+}
+$('prediction').onchange=e=>{tab().prediction=e.target.value;refresh()};
+$('guide-list').replaceChildren(...Array.from(guides,([id,g])=>btn(g.title,()=>{selectGuide(id);load()})));
+function render(){const t=tab(),s=t.machine;renderGuide(t);
 for(const key of ['pc','ir','mar','mdr']){
   const chip=$('chip-'+key),name=key.toUpperCase();
   chip.textContent=name+' '+s[key];
@@ -68,4 +101,6 @@ $('compile').onclick=$('reset').onclick=()=>{stop();try{const t=tab(),bytes=asse
 $('step').onclick=()=>{stop();advance();refresh()};$('instruction').onclick=()=>{stop();do{advance()}while(!tab().machine.halt&&tab().machine.phase);refresh()};
 $('run').onclick=()=>{stop();let first=true;timer=setInterval(()=>{const t=tab(),s=t.machine;const points=t.breaks.trim().split(/[,\s]+/).filter(Boolean).map(Number);if(!first&&s.phase===0&&points.includes(s.pc)){stop();$('status').textContent='Breakpoint · PC '+s.pc;return}first=false;advance();refresh();if(t.machine.halt)stop()},Number(tab().speed))};
 $('pause').onclick=stop;for(const [id,src,dst] of [['back','past','future'],['redo','future','past']])$(id).onclick=()=>{stop();const t=tab();if(t[src].length){t[dst].push(t.machine);t.machine=t[src].pop();refresh()}};
-$('layout').onclick=()=>changeTree(standard());$('fullscreen').onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();window.addEventListener('pagehide',stop);load();
+$('layout').onclick=()=>changeTree(standard());$('fullscreen').onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();window.addEventListener('pagehide',stop);
+if(!history.state?.guideOpened){selectGuide(lessonParams.get('guide'));history.replaceState({...history.state,guideOpened:true},'')}
+load();
