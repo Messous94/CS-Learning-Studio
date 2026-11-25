@@ -1,4 +1,4 @@
-import {assemble,boot,tick,phases} from './integrated-engine.mjs';
+import {assemble,boot,tick,phases,ops} from './integrated-engine.mjs';
 import {ids,standard,leaves,remove,dock,restore,ratioAt,split} from './workspace.mjs';
 const workspace=document.getElementById('workspace'),panels=Object.fromEntries([...workspace.children].map(p=>[p.dataset.panel,p]));
 const $=id=>document.getElementById(id)||Object.values(panels).map(p=>p.querySelector('#'+id)).find(Boolean);
@@ -20,6 +20,29 @@ function stop(){clearInterval(timer);timer=null}
 $('angle').oninput=e=>$('board').style.setProperty('--angle',e.target.value+'deg');
 $('zoom').oninput=e=>$('board').style.setProperty('--zoom',String(Number(e.target.value)/100));
 if(location.hash==='#hardware')$('hardware').open=true;
+function explainPulse(state) {
+  if (!state.cycles) return 'المعالج جاهز. اضغط «نبضة واحدة» لجلب أول تعليمة.';
+  const previousPhase = (state.phase + phases.length - 1) % phases.length;
+  if (previousPhase === 0) return 'جلب المعالج بايت التعليمة من عنوان الذاكرة '+state.mar+' إلى سجل التعليمة IR. قيمته '+state.ir+'.';
+  if (previousPhase === 1) return 'قرأ المعالج بايت المعامل من العنوان '+state.mar+'. قيمة المعامل '+state.arg+'.';
+  const operation = ops[state.ir >> 4];
+  if (previousPhase === 2) return 'فكّت وحدة التحكم ترميز التعليمة '+operation+' استعدادًا لتنفيذها.';
+  if (previousPhase === 3) {
+    if (operation === 'STORE') return 'كتب المعالج القيمة '+state.mdr+' في عنوان الذاكرة '+state.mar+'.';
+    if (operation === 'LOAD') return 'قرأ المعالج القيمة '+state.mdr+' من عنوان الذاكرة '+state.mar+'.';
+    if (state.path.includes('Latch')) return 'نفّذ المعالج '+operation+' وحفظ النتيجة المؤقتة '+state.tmp+' حتى نبضة الكتابة.';
+    return 'أنهى المعالج مرحلة تنفيذ '+operation+'. تحدد النبضة التالية عنوان التعليمة القادمة أو حالة التوقف.';
+  }
+  if (state.halt) return 'اكتملت تعليمة HALT وتوقف المعالج.';
+  if (state.path.startsWith('Latch')) return 'كُتبت القيمة '+state.tmp+' في السجل R'+(state.ir & 3)+'.';
+  return 'اكتملت تعليمة '+operation+'. عنوان التعليمة التالية '+state.pc+'.';
+}
+const lessonParams = new URLSearchParams(location.search);
+if (lessonParams.get('lesson') && lessonParams.get('title')) {
+  const context = $('lesson-context');
+  context.textContent = 'المحاكي مرتبط بدرس «'+lessonParams.get('title')+'».';
+  context.hidden = false;
+}
 function render(){const t=tab(),s=t.machine;
 for(const key of ['pc','ir','mar','mdr']){
   const chip=$('chip-'+key),name=key.toUpperCase();
@@ -27,6 +50,7 @@ for(const key of ['pc','ir','mar','mdr']){
   chip.classList.toggle('active',new RegExp('\\b'+name+'\\b','i').test(s.path));
 }
 $('hardware-path').textContent=s.path;
+$('pulse-explanation').textContent=explainPulse(s);
 $('status').textContent=s.halt?'HALT':'PC '+s.pc+' · '+phases[s.phase]+' · Clock '+s.cycles;
 $('cpu').replaceChildren(...s.path.split(' → ').map(v=>{const n=document.createElement('div');n.className='block';n.textContent=v;return n}));
 $('registers').textContent=s.r.map((v,i)=>'R'+i+' = '+v).join(' | ')+' · '+['pc','ir','mar','mdr'].map(k=>k.toUpperCase()+' '+s[k]).join(' | ')+' · '+['Z','C','N','V'].map(k=>k+' '+s.flags[k]).join(' ');
