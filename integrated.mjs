@@ -96,10 +96,53 @@ function load(){stop();const t=tab();maximized=null;$('code').value=t.code;$('no
 $('experiments').replaceChildren(...data.tabs.map((x,i)=>btn('تجربة '+(i+1)+(x===t?' ✓':''),()=>{data.active=x.id;load()})),btn('＋ تجربة',()=>{const x=fresh();data.tabs.push(x);data.active=x.id;load()}));drawLayout();$('listing').textContent=assemble(t.accepted).map(v=>v.toString(16).padStart(2,'0')).join(' ');render();save()}
 function advance(){const t=tab();if(t.machine.halt)return;t.past.push(t.machine);t.past=t.past.slice(-100);t.machine=tick(t.machine);t.future=[]}
 function refresh(){render();save()}
-$('code').oninput=()=>{stop();tab().code=$('code').value;refresh()};$('notes').oninput=()=>{tab().notes=$('notes').value;save()};$('breaks').oninput=()=>{tab().breaks=$('breaks').value;save()};$('speed').onchange=()=>{stop();tab().speed=$('speed').value;save()};
+$('code').oninput=()=>{stop();tab().code=$('code').value;refresh()};$('notes').oninput=()=>{tab().notes=$('notes').value;save()};$('breaks').oninput=()=>{stop();tab().breaks=$('breaks').value;save()};$('speed').onchange=()=>{stop();tab().speed=$('speed').value;save()};
 $('compile').onclick=$('reset').onclick=()=>{stop();try{const t=tab(),bytes=assemble(t.code);t.machine=boot(bytes);t.accepted=t.code;t.past=[];t.future=[];load()}catch(e){$('status').textContent=e.message}};
 $('step').onclick=()=>{stop();advance();refresh()};$('instruction').onclick=()=>{stop();do{advance()}while(!tab().machine.halt&&tab().machine.phase);refresh()};
-$('run').onclick=()=>{stop();let first=true;timer=setInterval(()=>{const t=tab(),s=t.machine;const points=t.breaks.trim().split(/[,\s]+/).filter(Boolean).map(Number);if(!first&&s.phase===0&&points.includes(s.pc)){stop();$('status').textContent='Breakpoint · PC '+s.pc;return}first=false;advance();refresh();if(t.machine.halt)stop()},Number(tab().speed))};
+function parseBreakpoints(input) {
+  const points = {addresses:[], registers:[], writes:[]};
+  for (const token of input.trim().toUpperCase().split(/[\s,،]+/).filter(Boolean)) {
+    const match = /^(?:(R[0-3]|PC|IR|MAR|MDR)=|(W):)?(0X[0-9A-F]+|\d+)$/.exec(token);
+    if (!match || Number(match[3]) > 255) throw Error('شرط توقف غير صالح: '+token);
+    const value = Number(match[3]);
+    if (match[1]) points.registers.push({name:match[1],value});
+    else if (match[2]) points.writes.push(value);
+    else points.addresses.push(value);
+  }
+  return points;
+}
+function registerValue(state,name) {
+  return name.startsWith('R') ? state.r[Number(name[1])] : state[name.toLowerCase()];
+}
+function matchedConditions(points,before,after) {
+  const reasons=[];
+  if (before.phase===3 && ops[before.ir >> 4]==='STORE' && points.writes.includes(after.mar))
+    reasons.push('كتابة القيمة '+after.mdr+' في عنوان الذاكرة '+after.mar);
+  for (const {name,value} of points.registers) {
+    if (registerValue(before,name)!==value && registerValue(after,name)===value)
+      reasons.push('وصل السجل '+name+' إلى '+value);
+  }
+  return reasons;
+}
+$('run').onclick=()=>{
+  stop();
+  const t=tab();
+  let points;
+  try {points=parseBreakpoints(t.breaks)} catch(error){$('status').textContent=error.message;return}
+  timer=setInterval(()=>{
+    const before=t.machine;
+    advance();
+    refresh();
+    const after=t.machine;
+    const reasons=matchedConditions(points,before,after);
+    if (!after.halt && after.phase===0 && points.addresses.includes(after.pc))
+      reasons.push('عنوان التعليمة PC '+after.pc);
+    if (reasons.length) {
+      stop();
+      $('status').textContent='توقف عند النبضة '+after.cycles+' · '+reasons.join(' · ');
+    } else if(after.halt) stop();
+  },Number(t.speed));
+};
 $('pause').onclick=stop;for(const [id,src,dst] of [['back','past','future'],['redo','future','past']])$(id).onclick=()=>{stop();const t=tab();if(t[src].length){t[dst].push(t.machine);t.machine=t[src].pop();refresh()}};
 $('layout').onclick=()=>changeTree(standard());$('fullscreen').onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();window.addEventListener('pagehide',stop);
 if(!history.state?.guideOpened){selectGuide(lessonParams.get('guide'));history.replaceState({...history.state,guideOpened:true},'')}
