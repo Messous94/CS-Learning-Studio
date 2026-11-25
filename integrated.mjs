@@ -17,7 +17,16 @@ function build(t,path=[]){if(!t){const empty=document.createElement('div');empty
 const narrow=matchMedia('(max-width: 760px)');narrow.addEventListener('change',drawLayout);function drawLayout(){const t=tab(),visible=leaves(t.tree);if(!visible.includes(t.mobile))t.mobile=visible[0];const bar=$('mobile-panels');bar.replaceChildren();for(const id of visible){const b=btn(names[id],()=>{t.mobile=id;save();drawLayout()});b.setAttribute('role','tab');b.setAttribute('aria-selected',String(id===t.mobile));bar.append(b)}workspace.replaceChildren(build(narrow.matches?t.mobile||null:maximized||t.tree));const opener=$('open-panel');opener.replaceChildren(new Option('فتح نافذة…',''));for(const id of ids.filter(id=>!visible.includes(id)))opener.append(new Option(names[id],id));opener.disabled=visible.length===ids.length;opener.onchange=()=>{if(opener.value){const id=opener.value;t.mobile=id;changeTree(t.tree?split('x',t.tree,id,.65):id)}}}
 
 function stop(){clearInterval(timer);timer=null}
+$('angle').oninput=e=>$('board').style.setProperty('--angle',e.target.value+'deg');
+$('zoom').oninput=e=>$('board').style.setProperty('--zoom',String(Number(e.target.value)/100));
+if(location.hash==='#hardware')$('hardware').open=true;
 function render(){const t=tab(),s=t.machine;
+for(const key of ['pc','ir','mar','mdr']){
+  const chip=$('chip-'+key),name=key.toUpperCase();
+  chip.textContent=name+' '+s[key];
+  chip.classList.toggle('active',new RegExp('\\b'+name+'\\b','i').test(s.path));
+}
+$('hardware-path').textContent=s.path;
 $('status').textContent=s.halt?'HALT':'PC '+s.pc+' · '+phases[s.phase]+' · Clock '+s.cycles;
 $('cpu').replaceChildren(...s.path.split(' → ').map(v=>{const n=document.createElement('div');n.className='block';n.textContent=v;return n}));
 $('registers').textContent=s.r.map((v,i)=>'R'+i+' = '+v).join(' | ')+' · '+['pc','ir','mar','mdr'].map(k=>k.toUpperCase()+' '+s[k]).join(' | ')+' · '+['Z','C','N','V'].map(k=>k+' '+s.flags[k]).join(' ');
