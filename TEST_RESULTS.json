@@ -1,0 +1,19 @@
+{
+  "loaded_463": true,
+  "loaded_28": true,
+  "seed_status": {
+    "count": 29,
+    "cs101": "completed",
+    "hw": 27
+  },
+  "lesson_plan_visible": true,
+  "prompt_contains_topics": true,
+  "prompt_has_activity_spec": true,
+  "prompt_has_lab_spec": true,
+  "unsupported_lab_skips_api": true,
+  "legacy_kept": true,
+  "charge_lab_ui": true,
+  "charge_lab_works": true,
+  "generated_data_persists": true,
+  "script_errors": []
+}
