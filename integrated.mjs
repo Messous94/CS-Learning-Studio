@@ -41,6 +41,13 @@ const lessonParams = new URLSearchParams(location.search);
 if (lessonParams.get('lesson') && lessonParams.get('title')) {
   const context = $('lesson-context');
   context.textContent = 'المحاكي مرتبط بدرس «'+lessonParams.get('title')+'».';
+  const backLink=document.createElement('a');
+  const target=new URL('./index.html',location.href);
+  target.searchParams.set('returnLesson',lessonParams.get('lesson'));
+  target.searchParams.set('section',lessonParams.get('section') || 'reading');
+  backLink.href=target.href;
+  backLink.textContent='الرجوع إلى الدرس';
+  context.append(' ',backLink);
   context.hidden = false;
 }
 const guides = new Map([
